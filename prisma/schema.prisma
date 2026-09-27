@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String     @id @default(uuid())
+  name          String
+  phone         String     @unique
+  email         String?    @unique
+  passwordHash  String
+  role          String     @default("AGENT") // AGENT, DISPATCHER, ADMIN
+  status        String     @default("ACTIVE")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  bookings      Booking[]  @relation("UserBookings")
+  auditLogs     AuditLog[]
+  sessions      Session[]
+  notifications Notification[]
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  dedupeKey   String
+  type        String
+  title       String
+  message     String
+  priority    String    @default("NORMAL")
+  link        String?
+  readAt      DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  tokenHash   String   @unique
+  userId      String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Customer {
+  id            String     @id @default(uuid())
+  name          String
+  phone         String     @unique
+  note          String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  bookings      Booking[]
+}
+
+model Vehicle {
+  id            String     @id @default(uuid())
+  name          String
+  plateNumber   String     @unique
+  type          String     // Limousine, MU-X
+  seatCapacity  Int
+  status        String     @default("ACTIVE")
+  
+  trips         Trip[]
+}
+
+model Driver {
+  id            String     @id @default(uuid())
+  name          String
+  phone         String     @unique
+  licenseNumber String?
+  status        String     @default("ACTIVE")
+
+  trips         Trip[]
+  schedules     Schedule[]
+}
+
+model Route {
+  id            String         @id @default(uuid())
+  origin        String
+  destination   String
+  status        String         @default("ACTIVE")
+  basePrice     Float          @default(130000) // Giá người lớn mặc định
+
+  schedules     Schedule[]
+  trips         Trip[]
+  priceConfigs  PriceConfig[]
+  holidayPrices HolidayPrice[]
+}
+
+model Schedule {
+  id            String     @id @default(uuid())
+  routeId       String
+  departureTime String     // HH:mm format
+  active        Boolean    @default(true)
+  vehicleType   String?    // Limousine, MU-X (trống nếu áp dụng mọi xe)
+  driverId      String?
+
+  route         Route      @relation(fields: [routeId], references: [id])
+  driver        Driver?    @relation(fields: [driverId], references: [id])
+  trips         Trip[]
+
+  @@unique([routeId, departureTime])
+}
+
+model Trip {
+  id            String     @id @default(uuid())
+  routeId       String
+  scheduleId    String
+  vehicleId     String
+  driverId      String?
+  travelDate    DateTime   // Store date only
+  status        String     @default("SCHEDULED") // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  
+  route         Route      @relation(fields: [routeId], references: [id])
+  schedule      Schedule   @relation(fields: [scheduleId], references: [id])
+  vehicle       Vehicle    @relation(fields: [vehicleId], references: [id])
+  driver        Driver?    @relation(fields: [driverId], references: [id])
+  
+  bookings      Booking[]
+  bookingSeats  BookingSeat[]
+  parcels       Parcel[]
+
+  @@unique([scheduleId, travelDate])
+  @@index([routeId, travelDate])
+}
+
+model Booking {
+  id              String     @id @default(uuid())
+  bookingCode     String     @unique
+  customerId      String
+  tripId          String
+  passengerCount  Int
+  pickupLocation  String
+  dropoffLocation String
+  ticketType      String     // ADULT, STUDENT, PRIVATE
+  subtotal        Float
+  discount        Float      @default(0)
+  total           Int        @default(0) // subtotal - discount
+  status          String     @default("CONFIRMED") // CONFIRMED, CANCELLED, HOLD
+  paymentStatus   String     @default("UNPAID") // UNPAID, PARTIAL, PAID
+  paymentMethod   String     @default("CASH") // CASH, TRANSFER
+  notes           String?
+  seatNumbers     String?    // e.g. "A1,B2"
+  createdBy       String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  customer        Customer   @relation(fields: [customerId], references: [id])
+  trip            Trip       @relation(fields: [tripId], references: [id])
+  user            User       @relation("UserBookings", fields: [createdBy], references: [id])
+  payments        Payment[]
+  callRecords     CallRecord[]
+  smsLogs         SmsLog[]
+  seats           BookingSeat[]
+  changes         BookingChange[]
+
+  @@index([tripId, status])
+  @@index([customerId, createdAt])
+}
+
+model BookingChange {
+  id             String   @id @default(uuid())
+  bookingId      String
+  action         String   // TRANSFER, CANCEL
+  fromTripId     String?
+  toTripId       String?
+  fromSeats      String?
+  toSeats        String?
+  reason         String?
+  changedBy      String
+  createdAt      DateTime @default(now())
+
+  booking        Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
+}
+
+model BookingSeat {
+  id          String   @id @default(uuid())
+  bookingId   String
+  tripId      String
+  seatNumber  String
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, seatNumber])
+  @@index([bookingId])
+}
+
+model Payment {
+  id            String     @id @default(uuid())
+  bookingId     String
+  amount        Float
+  method        String     // CASH, BANK_TRANSFER
+  status        String     @default("COMPLETED")
+  paidAt        DateTime   @default(now())
+
+  booking       Booking    @relation(fields: [bookingId], references: [id])
+}
+
+model CallRecord {
+  id                String         @id @default(uuid())
+  callerNumber      String
+  agentId           String?
+  bookingId         String?
+  startedAt         DateTime       @default(now())
+  endedAt           DateTime?
+  duration          Int?           // in seconds
+  recordingStatus   String         @default("PENDING") // PENDING, UPLOADED, FAILED
+  audioStorageKey   String?
+  transcriptStatus  String         @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  
+  booking           Booking?       @relation(fields: [bookingId], references: [id])
+  transcripts       Transcript[]
+  aiExtractions     AIExtraction[]
+}
+
+model Transcript {
+  id            String               @id @default(uuid())
+  callId        String
+  text          String
+  language      String               @default("vi")
+  createdAt     DateTime             @default(now())
+
+  callRecord    CallRecord           @relation(fields: [callId], references: [id])
+  segments      TranscriptSegment[]
+}
+
+model TranscriptSegment {
+  id            String     @id @default(uuid())
+  transcriptId  String
+  speaker       String     // CUSTOMER, AGENT, UNKNOWN
+  startTime     Float
+  endTime       Float
+  text          String
+  confidence    Float?
+
+  transcript    Transcript @relation(fields: [transcriptId], references: [id])
+}
+
+model AIExtraction {
+  id               String      @id @default(uuid())
+  callId           String
+  field            String      // e.g., 'departure_time', 'passenger_count'
+  value            String
+  confidence       Float       // 0.0 to 1.0
+  sourceTimestamp  Float?      // To jump to audio
+  status           String      @default("PENDING")
+
+  callRecord       CallRecord  @relation(fields: [callId], references: [id])
+}
+
+model AuditLog {
+  id            String     @id @default(uuid())
+  userId        String
+  action        String
+  entityType    String
+  entityId      String
+  beforeData    String?    // JSON string
+  afterData     String?    // JSON string
+  createdAt     DateTime   @default(now())
+
+  user          User       @relation(fields: [userId], references: [id])
+}
+
+model Parcel {
+  id            String     @id @default(uuid())
+  senderName    String
+  senderPhone   String
+  receiverName  String
+  receiverPhone String
+  description   String
+  fee           Float
+  status        String     @default("PENDING") // PENDING, DELIVERING, DELIVERED, CANCELLED
+  tripId        String
+  pickupLocation String?
+  dropoffLocation String?
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  trip          Trip       @relation(fields: [tripId], references: [id])
+}
+
+model SmsTemplate {
+  id          String   @id @default(uuid())
+  type        String   @unique // BOOKING_CONFIRMATION, TRIP_REMINDER, etc.
+  name        String
+  content     String   // The template body with variables {{name}}, {{route}}, etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SmsLog {
+  id          String   @id @default(uuid())
+  phone       String
+  content     String
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  provider    String   @default("MOCK_ZNS")
+  bookingId   String?
+  createdAt   DateTime @default(now())
+
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+}
+
+// ============================================================
+// GIÁ VÉ & NGÀY LỄ
+// ============================================================
+
+model PriceConfig {
+  id          String   @id @default(uuid())
+  name        String   // "Giá người lớn", "Giá sinh viên"
+  ticketType  String   // ADULT | STUDENT
+  routeId     String?  // null = áp dụng mọi tuyến
+  basePrice   Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  route       Route?   @relation(fields: [routeId], references: [id])
+}
+
+model HolidayPrice {
+  id           String   @id @default(uuid())
+  name         String   // "Tết Nguyên Đán 2025"
+  startDate    DateTime
+  endDate      DateTime
+  adjustType   String   // PERCENTAGE | FIXED
+  adjustValue  Float    // e.g., 20 (%) hoặc 30000 (VNĐ)
+  adjustMode   String   // INCREASE | DECREASE
+  routeId      String?  // null = tất cả tuyến
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  route        Route?   @relation(fields: [routeId], references: [id])
+}

@@ -1,0 +1,60 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.875rem;
+}
+
+.badgeActive {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badgeAdmin {
+  background-color: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badgeAgent {
+  background-color: rgba(14, 165, 233, 0.1);
+  color: var(--primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+@media (max-width: 760px) { .settingsGrid { grid-template-columns: 1fr; } }
+.settingsGrid > * { animation: settingCardIn .42s cubic-bezier(.22,1,.36,1) both; }
+.settingsGrid > :nth-child(2) { animation-delay: .04s; }.settingsGrid > :nth-child(3) { animation-delay: .08s; }.settingsGrid > :nth-child(4) { animation-delay: .12s; }.settingsGrid > :nth-child(5) { animation-delay: .16s; }.settingsGrid > :nth-child(6) { animation-delay: .2s; }
+@keyframes settingCardIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .settingsGrid > * { animation: none; } }
+.page { width: 100%; max-width: 1200px; margin: 0 auto; }
+.header { margin-bottom: 28px; }
+.header h1 { margin: 4px 0 5px; color: var(--text-main); font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -.025em; }
+.header p { color: var(--text-muted); font-size: .95rem; }
+.eyebrow { color: var(--primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.settingsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 32px; }
+.settingsGrid :global(.settings-card) { position: relative; overflow: hidden; box-shadow: 0 7px 22px rgba(15,42,70,.045); }.settingsGrid :global(.settings-card)::after { content: ''; position: absolute; inset: auto 0 0; height: 3px; background: linear-gradient(90deg, var(--primary), var(--secondary)); transform: scaleX(0); transform-origin: left; transition: transform .22s ease; }.settingsGrid :global(.settings-card):hover::after { transform: scaleX(1); }
+.manageLink { color: var(--primary); font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.manageLink:hover { text-decoration: underline; }

@@ -1,0 +1,24 @@
+.container {
+  display: flex;
+  min-height: 100vh;
+}
+.workspace { min-width: 0; flex: 1; margin-left: 264px; transition: margin-left .25s cubic-bezier(.22,1,.36,1); }
+.workspaceCollapsed { margin-left: 78px; }
+
+.mainContent {
+  flex: 1;
+  padding: 28px;
+  background-color: var(--bg-base);
+}
+.pageTransition { min-height: calc(100vh - 128px); animation: pageEnter .38s cubic-bezier(.22,1,.36,1) both; }
+.pageTransition > * { animation: contentReveal .5s .06s cubic-bezier(.22,1,.36,1) both; }
+@keyframes pageEnter { from { opacity: 0; transform: translateY(9px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes contentReveal { from { opacity: .45; } to { opacity: 1; } }
+.overlay { display: none; }
+@media (max-width: 900px) {
+  .workspace { margin-left: 0; }
+  .mainContent { padding: 20px; }
+  .overlay { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(15, 23, 42, .58); backdrop-filter: blur(2px); }
+}
+@media (max-width: 600px) { .mainContent { padding: 16px 12px 28px; } }
+@media (prefers-reduced-motion: reduce) { .pageTransition, .pageTransition > * { animation: none; } }

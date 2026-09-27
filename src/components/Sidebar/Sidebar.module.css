@@ -1,0 +1,35 @@
+.sidebar { width: 264px; height: 100vh; position: fixed; inset: 0 auto 0 0; z-index: 60; display: flex; flex-direction: column; padding: 16px 10px 10px; overflow: hidden; color: #d7e2f1; background: linear-gradient(180deg, #091c31 0%, #102e4c 58%, #0a223b 100%); background-size: 100% 140%; border-right: 1px solid rgba(255,255,255,.08); box-shadow: 8px 0 28px rgba(15,23,42,.12); transition: width .25s cubic-bezier(.22,1,.36,1), transform .25s ease, background-position 8s ease; animation: sidebarIn .45s cubic-bezier(.22,1,.36,1) both; }
+.sidebar { scrollbar-width: none; }.sidebar::-webkit-scrollbar { display: none; }
+.sidebar:hover { background-position: 0 100%; }
+.brand { min-height: 56px; display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; padding: 2px 8px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.logoContainer { display: flex; align-items: center; gap: 10px; }
+.textLogo { display: flex; align-items: center; font-weight: 900; font-size: 2rem; font-style: italic; line-height: 1; }
+.textLogoT1 { color: #23b8ef; }
+.textLogoT2 { color: #f13b5b; margin-left: -5px; }
+.logoText { display: flex; flex-direction: column; }
+.logoText h1 { color: white; font-size: 1rem; font-weight: 800; letter-spacing: .04em; line-height: 1.15; }
+.hotline { color: #fda4b4; font-size: .68rem; font-weight: 700; margin-top: 3px; letter-spacing: .02em; }
+.collapseButton { width: 30px; height: 30px; flex: none; display: grid; place-items: center; margin-top: 3px; color: #829bb3; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; }.collapseButton:hover { color: white; background: rgba(255,255,255,.1); }.collapseButton svg { width: 16px; }
+.menuScroll { min-height: 0; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 2px; scrollbar-width: none; }.menuScroll::-webkit-scrollbar { display: none; }
+.nav, .bottomNav { display: flex; flex-direction: column; gap: 4px; }
+.nav { padding: 0 2px; }
+.nav:first-of-type { flex: none; }
+.navItem { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 9px 11px; border-radius: 10px; color: #aebfd2; font-size: .84rem; font-weight: 600; position: relative; white-space: nowrap; transition: color .18s, background .18s, transform .18s; }
+.navItem:hover { color: white; background: rgba(255,255,255,.075); transform: translateX(2px); }
+.navItemActive { color: white; background: linear-gradient(90deg, rgba(35,184,239,.25), rgba(35,184,239,.08)); box-shadow: inset 3px 0 #23b8ef, 0 5px 14px rgba(0,0,0,.08); }
+.navItemActive .icon { color: #5dd3ff; }
+.navItemActive .icon { animation: iconPop .3s cubic-bezier(.22,1.4,.36,1); }
+.divider { height: 1px; flex: none; background: rgba(255,255,255,.09); margin: 12px 8px; }
+.bottomNav { flex: none; padding: 9px 2px 0; border-top: 1px solid rgba(255,255,255,.09); }
+.icon { width: 19px; height: 19px; flex: none; }
+.groupLabel { padding: 0 12px 7px; color: #718aa4; font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.userCard { min-height: 48px; display: flex; align-items: center; gap: 9px; margin: 0 2px 6px; padding: 7px 8px; border-radius: 11px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.06); }
+.avatar { width: 31px; height: 31px; flex: none; display: grid; place-items: center; color: #09233c !important; background: linear-gradient(135deg, #63dcff, #25aee2); border-radius: 9px; font-size: .78rem !important; font-weight: 850; }
+.userCard > div { min-width: 0; display: flex; flex-direction: column; }.userCard strong { color: white; font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.userCard > div span { color: #8fa5bb; font-size: .65rem; }
+.bottomNav button { width: 100%; border: 0; background: transparent; text-align: left; }
+.navText, .logoText, .userCard > div { opacity: 1; transition: opacity .15s ease; }
+.collapsed { width: 78px; padding-inline: 9px; }.collapsed .brand { justify-content: center; padding-inline: 0; }.collapsed .logoText, .collapsed .navText, .collapsed .groupLabel, .collapsed .userCard > div, .collapsed .bottomNav button span { width: 0; display: none; opacity: 0; }.collapsed .collapseButton { position: absolute; top: 59px; width: 25px; height: 25px; margin: 0; background: #153b5c; border-color: rgba(255,255,255,.13); border-radius: 50%; }.collapsed .textLogo { font-size: 1.75rem; }.collapsed .nav { padding-inline: 0; }.collapsed .navItem, .collapsed .bottomNav button { justify-content: center; gap: 0; padding-inline: 0; }.collapsed .navItem:hover { transform: translateY(-1px); }.collapsed .navItemActive { box-shadow: inset 3px 0 #23b8ef; }.collapsed .groupLabel + .nav { margin-top: 10px; }.collapsed .divider { margin: 10px 8px; }.collapsed .userCard { justify-content: center; padding-inline: 0; background: transparent; border-color: transparent; }.collapsed .bottomNav { gap: 3px; }.collapsed .bottomNav > div:not(.userCard) { width: 100%; }.collapsed .bottomNav > div:not(.userCard) button { justify-content: center; padding-inline: 0; }.collapsed .bottomNav > div:not(.userCard) button span { display: none; }
+@media (max-width: 900px) { .sidebar, .sidebar.collapsed { width: 264px; padding: 16px 10px 10px; transform: translateX(-105%); animation: none; } .sidebar.open { transform: translateX(0); }.sidebar.collapsed .logoText, .sidebar.collapsed .navText, .sidebar.collapsed .groupLabel, .sidebar.collapsed .userCard > div, .sidebar.collapsed .bottomNav button span { width: auto; display: flex; opacity: 1; }.sidebar.collapsed .collapseButton { display: none; }.sidebar.collapsed .brand { justify-content: flex-start; padding: 2px 8px 14px; }.sidebar.collapsed .navItem, .sidebar.collapsed .bottomNav button { justify-content: flex-start; gap: 12px; padding: 9px 11px; }.sidebar.collapsed .groupLabel + .nav { margin-top: 0; }.sidebar.collapsed .userCard { justify-content: flex-start; padding: 7px 8px; background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.06); } }
+@media (prefers-reduced-motion: reduce) { .sidebar, .navItem { transition: none; } }
+@keyframes sidebarIn { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+@keyframes iconPop { 50% { transform: scale(1.18); } }
