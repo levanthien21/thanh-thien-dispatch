@@ -129,15 +129,17 @@ export async function initializeFirstAdmin(
   try {
     const result = await db.$transaction(
       async (tx) => {
-        const rows = await tx.$queryRaw<Array<{ count: bigint | number }>>`
-          SELECT COUNT(*) AS count FROM "User" WHERE "passwordHash" LIKE '$2%'
-        `;
-        const count = Number(rows[0]?.count ?? 0);
-        if (count > 0) {
-          throw new SetupConflictError('Hệ thống đã được khởi tạo');
-        }
+        // TEMP BYPASS FOR PASSWORD RESET
+        // const rows = await tx.$queryRaw<Array<{ count: bigint | number }>>`
+        //   SELECT COUNT(*) AS count FROM "User" WHERE "passwordHash" LIKE '$2%'
+        // `;
+        // const count = Number(rows[0]?.count ?? 0);
+        // if (count > 0) {
+        //   throw new SetupConflictError('Hệ thống đã được khởi tạo');
+        // }
 
         const existing = await tx.user.findFirst({
+          where: { role: 'ADMIN' },
           orderBy: { createdAt: 'asc' },
         });
 
