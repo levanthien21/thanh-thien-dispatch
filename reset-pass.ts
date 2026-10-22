@@ -15,8 +15,8 @@ async function resetPassword() {
     // Tìm tài khoản ADMIN đầu tiên
     const admin = users.find(u => u.role === 'ADMIN') || users[0];
     
-    // Tạo mật khẩu mới: Admin@123
-    const newPassword = 'Admin@123';
+    // Tạo mật khẩu mới: Admin@12345 (11 ký tự >= 10 theo yêu cầu hệ thống)
+    const newPassword = 'Admin@12345';
     const hash = await bcrypt.hash(newPassword, 12);
 
     await prisma.user.update({

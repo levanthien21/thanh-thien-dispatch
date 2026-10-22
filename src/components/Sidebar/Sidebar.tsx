@@ -3,14 +3,37 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ComponentType } from 'react';
-import { BarChart3, Bell, CarFront, Clock, Contact, LayoutDashboard, LogOut, MessageSquare, Package, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, Ticket, UserCircle, Users } from 'lucide-react';
+import { 
+  BarChart3, 
+  Bell, 
+  CarFront, 
+  Clock, 
+  Contact, 
+  Headphones, 
+  LayoutDashboard, 
+  LogOut, 
+  MessageSquare, 
+  Package, 
+  PanelLeftClose, 
+  PanelLeftOpen, 
+  PhoneCall, 
+  ScrollText, 
+  Search, 
+  Settings, 
+  ShieldCheck, 
+  Ticket, 
+  UserCircle, 
+  Users 
+} from 'lucide-react';
 import { canManageFleet, canManageSystem } from '@/lib/access';
 import ThemeToggle from '../ThemeToggle/ThemeToggle';
 import styles from './Sidebar.module.css';
 
 type NavItem = { name: string; href: string; icon: ComponentType<{ className?: string }>; exact?: boolean };
+
 const MAIN_NAV: NavItem[] = [
   { name: 'Tổng quan', href: '/', icon: LayoutDashboard, exact: true },
+  { name: 'Tổng đài SIP', href: '/calls', icon: Headphones },
   { name: 'Đặt vé', href: '/booking', icon: Ticket },
   { name: 'Khách hàng', href: '/customers', icon: Users },
   { name: 'Ký gửi', href: '/parcels', icon: Package },
@@ -18,12 +41,15 @@ const MAIN_NAV: NavItem[] = [
   { name: 'Thông báo', href: '/notifications', icon: Bell },
   { name: 'Báo cáo', href: '/reports', icon: BarChart3 },
 ];
+
 const FLEET_NAV: NavItem[] = [
   { name: 'Tài xế', href: '/drivers', icon: Contact },
   { name: 'Phương tiện', href: '/vehicles', icon: CarFront },
 ];
+
 const ADMIN_NAV: NavItem[] = [
   { name: 'Tổng quan cài đặt', href: '/settings', icon: Settings, exact: true },
+  { name: 'Cấu hình SIP Viettel', href: '/settings/sip', icon: PhoneCall },
   { name: 'Giá vé & ngày lễ', href: '/settings/prices', icon: Ticket },
   { name: 'Giờ chạy & tuyến', href: '/settings/schedules', icon: Clock },
   { name: 'SMS / Zalo ZNS', href: '/settings/sms', icon: MessageSquare },

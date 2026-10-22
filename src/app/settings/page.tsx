@@ -10,8 +10,9 @@ export default async function SettingsPage() {
   const users = await prisma.user.findMany({ orderBy: { id: 'asc' } });
 
   const settingsCards = [
+    { title: "Viettel SIP Trunking Mobile", desc: "Cấu hình tổng đài thoại số hotline Viettel, WebRTC Gateway và số điện thoại.", link: "/settings/sip", icon: PhoneCall, color: "#e11d48" },
+    { title: "Bàn trực Tổng đài & Cuộc gọi", desc: "Tiếp nhận cuộc gọi đến, tra cứu khách hàng và lịch sử đàm thoại.", link: "/calls", icon: PhoneCall, color: "#10b981" },
     { title: "Cấu hình SMS & Zalo ZNS", desc: "Quản lý mẫu tin nhắn tự động và lịch sử gửi tin cho khách hàng.", link: "/settings/sms", icon: MessageSquare, color: "#3b82f6" },
-    { title: "Cuộc gọi & Tổng đài AI", desc: "Thiết lập kịch bản tổng đài và xem lịch sử cuộc gọi.", link: "/calls", icon: PhoneCall, color: "#10b981" },
     { title: "Cài Đặt Giá Vé", desc: "Điều chỉnh giá vé cơ bản theo tuyến và cấu hình cho các dịp lễ Tết.", link: "/settings/prices", icon: DollarSign, color: "#f59e0b" },
     { title: "Cài Đặt Giờ Chạy Xe", desc: "Thêm, sửa, xóa hoặc bật/tắt lịch trình khởi hành theo từng tuyến.", link: "/settings/schedules", icon: Clock, color: "#8b5cf6" },
     { title: "Tài khoản & Phân quyền", desc: "Tạo tài khoản nhân viên, gán vai trò và khóa quyền truy cập.", link: "/settings/accounts", icon: UserCog, color: "#ec4899" },

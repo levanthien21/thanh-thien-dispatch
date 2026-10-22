@@ -40,10 +40,14 @@ export function validatePassword(password: unknown): string {
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
-  await prisma.$executeRaw`
-    INSERT INTO "Session" (id, "tokenHash", "userId", "expiresAt", "createdAt")
-    VALUES (${randomUUID()}, ${tokenHash(token)}, ${userId}, ${expiresAt}, NOW())
-  `;
+  await prisma.session.create({
+    data: {
+      id: randomUUID(),
+      tokenHash: tokenHash(token),
+      userId,
+      expiresAt,
+    },
+  });
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -58,21 +62,29 @@ export async function createSession(userId: string) {
 export async function deleteSession() {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (token) await prisma.$executeRaw`DELETE FROM "Session" WHERE "tokenHash" = ${tokenHash(token)}`;
+  if (token) {
+    await prisma.session.deleteMany({
+      where: { tokenHash: tokenHash(token) },
+    });
+  }
   store.delete(SESSION_COOKIE);
 }
 
 export async function verifySessionToken(token: string | undefined): Promise<AuthUser | null> {
   if (!token || token.length < 32) return null;
-  const rows = await prisma.$queryRaw<SessionRow[]>`
-    SELECT u.id, u.name, u.phone, u.role, s."expiresAt"
-    FROM "Session" s
-    JOIN "User" u ON u.id = s."userId"
-    WHERE s."tokenHash" = ${tokenHash(token)} AND s."expiresAt" > ${new Date()} AND u.status = 'ACTIVE'
-    LIMIT 1
-  `;
-  const row = rows[0];
-  return row ? { id: row.id, name: row.name, phone: row.phone, role: row.role } : null;
+  const session = await prisma.session.findFirst({
+    where: {
+      tokenHash: tokenHash(token),
+      expiresAt: { gt: new Date() },
+      user: { status: 'ACTIVE' },
+    },
+    include: {
+      user: {
+        select: { id: true, name: true, phone: true, role: true },
+      },
+    },
+  });
+  return session ? session.user : null;
 }
 
 export async function getCurrentUser() {

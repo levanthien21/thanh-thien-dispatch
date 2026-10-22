@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -26,7 +26,7 @@ export default function DashboardClient({ todayFormatted, selectedDateStr, stats
         // Run in parallel to eliminate UI freezing (10x faster)
         await Promise.all(
           (activeRouteIds as string[]).map(routeId => 
-            fetch(/api/trips?routeId=&date=, { method: 'POST' })
+            fetch(`/api/trips?routeId=${routeId}&date=${selectedDateStr}`, { method: 'POST' })
           )
         );
         router.refresh();

@@ -1,0 +1,503 @@
+.floatingTrigger {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 990;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--bg-panel, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 9999px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main, #0f172a);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floatingTrigger:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary, #0284c7);
+  box-shadow: 0 14px 28px -4px rgba(2, 132, 199, 0.25);
+}
+
+.triggerIconWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(2, 132, 199, 0.1);
+  color: var(--primary, #0284c7);
+}
+
+.statusDot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+}
+
+.statusDotRegistered {
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.statusDotConnecting {
+  background-color: #f59e0b;
+}
+
+.statusDotError {
+  background-color: #ef4444;
+}
+
+.statusDotRinging {
+  background-color: #06b6d4;
+  animation: pulseRinging 1s infinite alternate;
+}
+
+@keyframes pulseRinging {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(1.4); opacity: 0.7; }
+}
+
+/* Modal Popup for Incoming Call */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.incomingCard {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-panel, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.incomingHeader {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  padding: 24px;
+  text-align: center;
+  position: relative;
+}
+
+.carrierBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.callerAvatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  animation: phoneRing 1.5s infinite;
+}
+
+@keyframes phoneRing {
+  0% { transform: rotate(0) scale(1); }
+  10% { transform: rotate(-15deg) scale(1.05); }
+  20% { transform: rotate(15deg) scale(1.05); }
+  30% { transform: rotate(-15deg) scale(1.05); }
+  40% { transform: rotate(15deg) scale(1.05); }
+  50% { transform: rotate(0) scale(1); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+.callerNumber {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin: 0 0 4px;
+}
+
+.callerName {
+  font-size: 1rem;
+  opacity: 0.95;
+  font-weight: 500;
+  margin: 0;
+}
+
+.incomingBody {
+  padding: 20px 24px;
+}
+
+.crmBox {
+  background: var(--bg-base, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.crmRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+}
+
+.crmRow:last-child {
+  margin-bottom: 0;
+}
+
+.crmLabel {
+  color: var(--text-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crmValue {
+  font-weight: 600;
+  color: var(--text-main, #0f172a);
+}
+
+.vipBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.btnAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btnReject {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btnReject:hover {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.btnAnswer {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btnAnswer:hover {
+  background: #059669;
+}
+
+.btnQuickBooking {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s ease;
+}
+
+.btnQuickBooking:hover {
+  background: #0369a1;
+}
+
+/* Active Floating Call Bar */
+.activeCallBanner {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 995;
+  background: var(--bg-panel, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-left: 5px solid #10b981;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 380px;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.activeCallInfo {
+  flex: 1;
+}
+
+.activeCallerLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main, #0f172a);
+}
+
+.activeCallTimer {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #10b981;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.activeCallControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--bg-base, #f8fafc);
+  color: var(--text-main, #334155);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.iconBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+}
+
+.iconBtnActive {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.iconBtnHangup {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.iconBtnHangup:hover {
+  background: #dc2626;
+}
+
+/* Softphone Drawer / Popover */
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 980;
+}
+
+.softphoneDrawer {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  width: 340px;
+  background: var(--bg-panel, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  z-index: 985;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawerHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-base, #f8fafc);
+}
+
+.drawerTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialpadDisplay {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialInput {
+  font-size: 1.35rem;
+  font-weight: 700;
+  border: none;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  color: var(--text-main, #0f172a);
+}
+
+.keypadGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 16px;
+}
+
+.keyBtn {
+  aspect-ratio: 1.4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.keyBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+  transform: scale(1.02);
+}
+
+.keyBtn:active {
+  transform: scale(0.96);
+}
+
+.keyNumber {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.keyLetters {
+  font-size: 0.65rem;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.dialActions {
+  padding: 0 16px 16px;
+  display: flex;
+  gap: 10px;
+}
+
+.btnCall {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: #10b981;
+  color: #ffffff;
+  border-radius: 12px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btnCall:hover {
+  background: #059669;
+}
+
+.btnSimulate {
+  padding: 12px 14px;
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284c7;
+  border: 1px dashed #0284c7;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btnSimulate:hover {
+  background: rgba(2, 132, 199, 0.2);
+}

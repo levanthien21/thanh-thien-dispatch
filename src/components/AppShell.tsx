@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar/Sidebar';
 import Topbar from '@/components/Topbar/Topbar';
+import Softphone from '@/components/Softphone/Softphone';
 import styles from '@/app/layout.module.css';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -20,8 +21,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {menuOpen && <button className={styles.overlay} aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
       <div className={`${styles.workspace} ${sidebarCollapsed ? styles.workspaceCollapsed : ''}`}>
         <Topbar onMenu={() => setMenuOpen(true)} />
-        <main className={styles.mainContent}><div key={pathname} className={styles.pageTransition}>{children}</div></main>
+        <main className={styles.mainContent}>
+          <div key={pathname} className={styles.pageTransition}>{children}</div>
+        </main>
       </div>
+      <Softphone />
     </div>
   );
 }

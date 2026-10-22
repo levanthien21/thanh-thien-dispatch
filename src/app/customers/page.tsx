@@ -81,6 +81,12 @@ export default function CustomersPage() {
     return true;
   });
 
+  const handleCall = (phone: string) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tt-dial', { detail: phone }));
+    }
+  };
+
   return (
     <div className={styles.container}>
       <header className={styles.header} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '16px' }}>
@@ -114,7 +120,7 @@ export default function CustomersPage() {
             <label className={styles.label}>Từ ngày</label>
             <input 
               type="date" 
-              className={styles.input}
+              className={styles.input} 
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
             />
@@ -123,7 +129,7 @@ export default function CustomersPage() {
             <label className={styles.label}>Đến ngày</label>
             <input 
               type="date" 
-              className={styles.input}
+              className={styles.input} 
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
             />
@@ -228,18 +234,33 @@ export default function CustomersPage() {
                     {c.type === 'NEW' && <span style={{ padding: '4px 10px', borderRadius: '12px', backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem' }}>Khách mới</span>}
                   </div>
                   
-                  <button 
-                    onClick={() => setSelectedCustomer(c)}
-                    style={{ 
-                      padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--primary)', 
-                      color: 'var(--primary)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
-                      fontSize: '0.85rem'
-                    }}
-                    onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--primary)'; }}
-                  >
-                    Lịch sử
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      type="button"
+                      onClick={() => handleCall(c.phone)}
+                      style={{ 
+                        padding: '8px 12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', 
+                        color: '#10b981', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                        fontSize: '0.85rem'
+                      }}
+                      title="Gọi điện qua Viettel SIP"
+                    >
+                      <Phone size={14} /> Gọi
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedCustomer(c)}
+                      style={{ 
+                        padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid var(--primary)', 
+                        color: 'var(--primary)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                        fontSize: '0.85rem'
+                      }}
+                      onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--primary)'; }}
+                    >
+                      Lịch sử
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -252,9 +273,22 @@ export default function CustomersPage() {
         <div className={styles.modalOverlay} onClick={() => setSelectedCustomer(null)}>
           <div className={styles.modalContent} style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
             <h2 className={styles.sectionTitle} style={{ marginBottom: '8px' }}>Lịch sử giao dịch</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-              Khách hàng: <strong style={{ color: 'var(--text-base)' }}>{selectedCustomer.name}</strong> - {selectedCustomer.phone}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Khách hàng: <strong style={{ color: 'var(--text-base)' }}>{selectedCustomer.name}</strong> - {selectedCustomer.phone}
+              </p>
+              <button 
+                type="button" 
+                onClick={() => handleCall(selectedCustomer.phone)}
+                style={{ 
+                  padding: '6px 12px', borderRadius: 6, background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', 
+                  border: '1px solid #10b981', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, 
+                  display: 'inline-flex', alignItems: 'center', gap: 6 
+                }}
+              >
+                <Phone size={14} /> Gọi điện
+              </button>
+            </div>
 
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {selectedCustomer.bookings.length === 0 ? (
