@@ -100,10 +100,19 @@ export async function requireUser(roles?: string[]) {
 }
 
 export async function needsInitialSetup(db: PrismaClient = prisma) {
-  const rows = await db.$queryRaw<Array<{ count: bigint | number }>>`
-    SELECT COUNT(*) AS count FROM "User" WHERE "passwordHash" LIKE '$2%'
-  `;
-  return Number(rows[0]?.count ?? 0) === 0;
+  try {
+    const count = await db.user.count({
+      where: {
+        passwordHash: {
+          startsWith: '$2',
+        },
+      },
+    });
+    return count === 0;
+  } catch (error) {
+    console.error('needsInitialSetup error:', error);
+    return false;
+  }
 }
 
 export class SetupConflictError extends Error {

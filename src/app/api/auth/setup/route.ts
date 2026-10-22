@@ -11,7 +11,12 @@ import {
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
-  return NextResponse.json({ needsSetup: await needsInitialSetup() });
+  try {
+    return NextResponse.json({ needsSetup: await needsInitialSetup() });
+  } catch (error: any) {
+    console.error('Setup GET error:', error);
+    return NextResponse.json({ needsSetup: false, error: error?.message }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -53,26 +58,12 @@ export async function handleSetup(
     }
 
     await sessionFn(result.userId);
-    return NextResponse.json({ success: true }, { status: 201 });
-  } catch (error: unknown) {
-    if (error instanceof SetupConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+    return NextResponse.json({ success: true, redirect: '/' });
+  } catch (error: any) {
+    if (error instanceof SetupConflictError || error?.code === 'SETUP_CONFLICT') {
+      return NextResponse.json({ error: 'Hệ thống đã được khởi tạo' }, { status: 409 });
     }
-
-    const isInternalError =
-      error instanceof Error &&
-      (error.message.includes('Prisma') ||
-        error.message.includes('sqlite') ||
-        error.name.includes('Prisma'));
-
-    const message =
-      error instanceof Error && !isInternalError
-        ? error.message
-        : 'Không thể khởi tạo hệ thống';
-
-    const status = isInternalError ? 500 : 400;
-    return NextResponse.json({ error: message }, { status });
+    const message = error instanceof Error ? error.message : 'Khởi tạo thất bại';
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-
-
