@@ -11,8 +11,7 @@ import {
   CallTranscriptSegment,
   CallSummaryReport,
   generateConversationSegments,
-  extractCallSummaryFromTranscript,
-  generatePlayableCallWavDataUrl
+  extractCallSummaryFromTranscript
 } from './call-summarizer';
 
 const DEFAULT_CONFIG: ViettelSipConfig = {
@@ -43,11 +42,13 @@ class SipService {
   private liveSummary: CallSummaryReport | null = null;
   private listeners: Set<SipEventListener> = new Set();
   private durationInterval: any = null;
-  private transcriptSimInterval: any = null;
+  private transcriptSimCanceled: boolean = false;
+  private liveTurnAudio: HTMLAudioElement | null = null;
   private ws: WebSocket | null = null;
   private pc: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private mixAudioCtx: AudioContext | null = null;
   private remoteAudio: HTMLAudioElement | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
@@ -286,11 +287,10 @@ class SipService {
             isRecording: true
           };
           this.startDurationTimer();
-          this.startAudioRecording();
           this.startTranscriptSimulation();
           this.notify();
         }
-      }, 2200);
+      }, 2000);
     } else {
       this.setupWebRTCOutbound(cleanNumber);
     }
@@ -340,10 +340,11 @@ class SipService {
       isRecording: true
     };
     this.startDurationTimer();
-    this.startAudioRecording();
 
     if (this.config.mode === 'SIMULATION') {
       this.startTranscriptSimulation();
+    } else {
+      this.startTwoWayWebRTCRecording();
     }
     this.notify();
   }
@@ -375,67 +376,130 @@ class SipService {
     this.notify();
   }
 
-  private startTranscriptSimulation() {
+  /**
+   * Streams dialogue turns and plays clear spoken Vietnamese voices for both sides
+   * (Tổng đài viên & Khách hàng) during the active simulated call.
+   */
+  private async startTranscriptSimulation() {
     this.stopTranscriptSimulation();
     if (!this.currentCall) return;
 
+    this.transcriptSimCanceled = false;
+    const callSnapshot = this.currentCall;
     const plannedSegments = generateConversationSegments(
-      this.currentCall.phoneNumber,
-      this.currentCall.customer?.name,
-      this.currentCall.customer?.lastPickupLocation
+      callSnapshot.phoneNumber,
+      callSnapshot.customer?.name,
+      callSnapshot.customer?.lastPickupLocation
     );
 
-    let idx = 0;
-    // Push first greeting immediately
-    if (plannedSegments.length > 0) {
-      this.liveTranscript = [plannedSegments[0]];
+    for (let i = 0; i < plannedSegments.length; i++) {
+      if (
+        this.transcriptSimCanceled ||
+        !this.currentCall ||
+        (this.callState !== 'active' && this.callState !== 'held')
+      ) {
+        break;
+      }
+
+      const seg = plannedSegments[i];
+      this.liveTranscript = [...this.liveTranscript, seg];
       this.liveSummary = extractCallSummaryFromTranscript(
         this.liveTranscript,
         this.currentCall.phoneNumber,
         this.currentCall.customer?.name
       );
-      idx = 1;
       this.notify();
-    }
 
-    this.transcriptSimInterval = setInterval(() => {
-      if (!this.currentCall || (this.callState !== 'active' && this.callState !== 'held')) {
-        this.stopTranscriptSimulation();
-        return;
+      // Play the spoken Vietnamese audio for this turn (Agent female voice vs Customer male/phone voice)
+      await this.playLiveTurnAudio(
+        seg.text,
+        seg.speaker,
+        this.currentCall.customer?.name
+      );
+
+      // Pause 350ms between speaker turns
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  }
+
+  private playLiveTurnAudio(
+    text: string,
+    speaker: 'AGENT' | 'CUSTOMER',
+    customerName?: string
+  ): Promise<void> {
+    if (typeof window === 'undefined') return Promise.resolve();
+    return new Promise((resolve) => {
+      try {
+        if (this.liveTurnAudio) {
+          this.liveTurnAudio.pause();
+          this.liveTurnAudio = null;
+        }
+        const url = `/api/calls/tts?speaker=${encodeURIComponent(speaker)}&text=${encodeURIComponent(
+          text
+        )}${customerName ? `&name=${encodeURIComponent(customerName)}` : ''}`;
+
+        const audio = new Audio(url);
+        this.liveTurnAudio = audio;
+        const timeout = setTimeout(() => resolve(), 6500);
+
+        audio.onended = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        audio.onerror = () => {
+          clearTimeout(timeout);
+          setTimeout(resolve, 1800);
+        };
+        audio.play().catch(() => {
+          clearTimeout(timeout);
+          setTimeout(resolve, 1800);
+        });
+      } catch (e) {
+        setTimeout(resolve, 1800);
       }
-      if (idx < plannedSegments.length) {
-        this.liveTranscript = [...this.liveTranscript, plannedSegments[idx]];
-        this.liveSummary = extractCallSummaryFromTranscript(
-          this.liveTranscript,
-          this.currentCall.phoneNumber,
-          this.currentCall.customer?.name
-        );
-        idx++;
-        this.notify();
-      } else {
-        this.stopTranscriptSimulation();
-      }
-    }, 1800);
+    });
   }
 
   private stopTranscriptSimulation() {
-    if (this.transcriptSimInterval) {
-      clearInterval(this.transcriptSimInterval);
-      this.transcriptSimInterval = null;
+    this.transcriptSimCanceled = true;
+    if (this.liveTurnAudio) {
+      try {
+        this.liveTurnAudio.pause();
+      } catch (e) {}
+      this.liveTurnAudio = null;
     }
   }
 
-  private startAudioRecording() {
+  /**
+   * Mixes BOTH sides of a live WebRTC call (local microphone of Tổng đài viên + remote stream of Khách hàng)
+   * into a single combined AudioContext stream recorded by MediaRecorder.
+   */
+  private startTwoWayWebRTCRecording() {
     this.recordedChunks = [];
     if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
 
     navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then((stream) => {
-        this.localStream = stream;
+      .then((micStream) => {
+        this.localStream = micStream;
         if (typeof MediaRecorder === 'undefined') return;
 
         try {
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          this.mixAudioCtx = new AudioCtx();
+          const destination = this.mixAudioCtx.createMediaStreamDestination();
+
+          // 1. Connect Operator Microphone (Tổng đài viên)
+          const micSource = this.mixAudioCtx.createMediaStreamSource(micStream);
+          micSource.connect(destination);
+
+          // 2. Connect Remote WebRTC Stream (Khách hàng) if available
+          if (this.remoteStream && this.remoteStream.getAudioTracks().length > 0) {
+            const remoteSource = this.mixAudioCtx.createMediaStreamSource(this.remoteStream);
+            remoteSource.connect(destination);
+          }
+
+          const combinedStream = destination.stream;
           const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
             ? 'audio/webm;codecs=opus'
             : MediaRecorder.isTypeSupported('audio/webm')
@@ -443,8 +507,8 @@ class SipService {
             : '';
 
           this.mediaRecorder = mimeType
-            ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 })
-            : new MediaRecorder(stream);
+            ? new MediaRecorder(combinedStream, { mimeType, audioBitsPerSecond: 48000 })
+            : new MediaRecorder(combinedStream);
 
           this.mediaRecorder.ondataavailable = (ev) => {
             if (ev.data && ev.data.size > 0) {
@@ -454,18 +518,13 @@ class SipService {
 
           this.mediaRecorder.start(500);
         } catch (err) {
-          console.warn('MediaRecorder start warning:', err);
+          console.warn('Two-way MediaRecorder start warning:', err);
         }
       })
-      .catch(() => {
-        // No microphone connected or permission declined; fallback WAV synthesizer will be used
-      });
+      .catch(() => {});
   }
 
-  private async stopAudioRecordingAndGetDataUrl(
-    segments: CallTranscriptSegment[],
-    durationSec: number
-  ): Promise<string> {
+  private async stopTwoWayWebRTCRecording(): Promise<string | undefined> {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try {
         await new Promise<void>((resolve) => {
@@ -477,26 +536,31 @@ class SipService {
     }
     this.mediaRecorder = null;
 
-    // In LIVE mode with real microphone chunks (> 4KB), use the recorded WebM audio
+    if (this.mixAudioCtx) {
+      try {
+        await this.mixAudioCtx.close();
+      } catch (e) {}
+      this.mixAudioCtx = null;
+    }
+
     if (this.config.mode === 'LIVE' && this.recordedChunks.length > 0) {
       const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
+      this.recordedChunks = [];
       if (blob.size > 4096) {
         try {
-          const dataUrl = await new Promise<string>((resolve, reject) => {
+          return await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
-          this.recordedChunks = [];
-          return dataUrl;
         } catch (e) {}
       }
     }
 
     this.recordedChunks = [];
-    // Generate playable two-way telecom WAV audio matching the dialogue segments
-    return generatePlayableCallWavDataUrl(segments, durationSec);
+    // Return undefined so backend synthesizes the crystal-clear 2-way spoken Vietnamese WAV recording
+    return undefined;
   }
 
   public async hangupCall(sendBye = true) {
@@ -525,7 +589,7 @@ class SipService {
         wasActive ? 'COMPLETED' : 
         endingCall.direction === 'inbound' ? 'MISSED' : 'REJECTED';
 
-      const effectiveDuration = wasActive ? Math.max(endingCall.durationSeconds, 8) : 0;
+      const effectiveDuration = wasActive ? Math.max(endingCall.durationSeconds, 16) : 0;
 
       // Ensure completed calls always have full conversation segments & summary table
       if (wasActive && finalSegments.length < 3) {
@@ -549,9 +613,7 @@ class SipService {
         this.liveSummary = summaryReport;
       }
 
-      const audioDataUrl = wasActive
-        ? await this.stopAudioRecordingAndGetDataUrl(finalSegments, effectiveDuration)
-        : undefined;
+      const liveWebRtcDataUrl = wasActive ? await this.stopTwoWayWebRTCRecording() : undefined;
 
       const logItem: CallLogItem = {
         id: endingCall.id,
@@ -561,7 +623,7 @@ class SipService {
         duration: effectiveDuration,
         status,
         customerName: summaryReport?.extractedForm.name || endingCall.customer?.name,
-        audioDataUrl,
+        audioDataUrl: liveWebRtcDataUrl,
         summaryText: summaryReport?.summaryText,
         segments: finalSegments,
         summaryFields: summaryReport?.fields
@@ -663,7 +725,7 @@ class SipService {
             this.pc.addTrack(track, this.localStream);
           }
         });
-        this.startAudioRecording();
+        this.startTwoWayWebRTCRecording();
       }
     } catch (e) {
       console.error('WebRTC setup failed:', e);

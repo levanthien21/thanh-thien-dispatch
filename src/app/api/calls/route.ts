@@ -10,6 +10,7 @@ import {
   CallSummaryField,
   CallTranscriptSegment
 } from '@/lib/sip/call-summarizer';
+import { synthesizeTwoWaySpokenCallWav } from '@/lib/sip/voice-tts-server';
 
 export async function GET(request: Request) {
   try {
@@ -55,80 +56,113 @@ export async function GET(request: Request) {
 
     const phoneToName = new Map(customers.map(c => [c.phone, c.name]));
 
-    const formatted = callRecords.map(record => {
-      const cleanPhone = record.callerNumber.replace(/^out_/, '');
-      const direction = record.callerNumber.startsWith('out_') ? 'outbound' : 'inbound';
-      const duration = record.duration || 0;
-      const status = duration > 0 ? 'COMPLETED' : 'MISSED';
-      const latestTranscript = record.transcripts?.[0];
+    const formatted = await Promise.all(
+      callRecords.map(async (record) => {
+        const cleanPhone = record.callerNumber.replace(/^out_/, '');
+        const direction = record.callerNumber.startsWith('out_') ? 'outbound' : 'inbound';
+        let duration = record.duration || 0;
+        const status = duration > 0 ? 'COMPLETED' : 'MISSED';
+        const latestTranscript = record.transcripts?.[0];
 
-      let segments: CallTranscriptSegment[] = (latestTranscript?.segments || []).map(s => ({
-        speaker: (s.speaker === 'AGENT' ? 'AGENT' : 'CUSTOMER') as 'AGENT' | 'CUSTOMER',
-        startTime: s.startTime,
-        endTime: s.endTime,
-        text: s.text,
-        confidence: s.confidence ?? 0.95
-      }));
+        let segments: CallTranscriptSegment[] = (latestTranscript?.segments || []).map(s => ({
+          speaker: (s.speaker === 'AGENT' ? 'AGENT' : 'CUSTOMER') as 'AGENT' | 'CUSTOMER',
+          startTime: s.startTime,
+          endTime: s.endTime,
+          text: s.text,
+          confidence: s.confidence ?? 0.95
+        }));
 
-      let summaryText = latestTranscript?.text || '';
-      let summaryFields: CallSummaryField[] = (record.aiExtractions || []).map(ext => ({
-        field: ext.field as CallSummaryField['field'],
-        label: SUMMARY_FIELD_LABELS[ext.field as CallSummaryField['field']] || ext.field,
-        value: ext.value,
-        confidence: ext.confidence,
-        sourceTimestamp: ext.sourceTimestamp ?? 0
-      }));
+        let summaryText = latestTranscript?.text || '';
+        let summaryFields: CallSummaryField[] = (record.aiExtractions || []).map(ext => ({
+          field: ext.field as CallSummaryField['field'],
+          label: SUMMARY_FIELD_LABELS[ext.field as CallSummaryField['field']] || ext.field,
+          value: ext.value,
+          confidence: ext.confidence,
+          sourceTimestamp: ext.sourceTimestamp ?? 0
+        }));
 
-      const knownName =
-        record.booking?.customer?.name ||
-        phoneToName.get(cleanPhone) ||
-        summaryFields.find(f => f.field === 'customer_name')?.value ||
-        'Khách vãng lai';
+        const knownName =
+          record.booking?.customer?.name ||
+          phoneToName.get(cleanPhone) ||
+          summaryFields.find(f => f.field === 'customer_name')?.value ||
+          'Khách vãng lai';
 
-      // Auto-enrich completed calls that didn't have transcript/summary yet
-      if (status === 'COMPLETED' && segments.length === 0) {
-        segments = generateConversationSegments(
-          cleanPhone,
-          knownName !== 'Khách vãng lai' ? knownName : undefined,
-          record.booking?.pickupLocation
-        );
-        const generated = extractCallSummaryFromTranscript(segments, cleanPhone, knownName);
-        summaryText = generated.summaryText;
-        summaryFields = generated.fields;
-      } else if (status === 'COMPLETED' && (!summaryText || summaryFields.length === 0)) {
-        const generated = extractCallSummaryFromTranscript(segments, cleanPhone, knownName);
-        if (!summaryText) summaryText = generated.summaryText;
-        if (summaryFields.length === 0) summaryFields = generated.fields;
-      }
+        if (status === 'COMPLETED' && segments.length === 0) {
+          segments = generateConversationSegments(
+            cleanPhone,
+            knownName !== 'Khách vãng lai' ? knownName : undefined,
+            record.booking?.pickupLocation
+          );
+          const generated = extractCallSummaryFromTranscript(segments, cleanPhone, knownName);
+          summaryText = generated.summaryText;
+          summaryFields = generated.fields;
+        } else if (status === 'COMPLETED' && (!summaryText || summaryFields.length === 0)) {
+          const generated = extractCallSummaryFromTranscript(segments, cleanPhone, knownName);
+          if (!summaryText) summaryText = generated.summaryText;
+          if (summaryFields.length === 0) summaryFields = generated.fields;
+        }
 
-      const audioUrl =
-        record.audioStorageKey ||
-        (status === 'COMPLETED' ? generatePlayableCallWavDataUrl(segments, duration) : null);
+        const finalCustomerName =
+          knownName !== 'Khách vãng lai'
+            ? knownName
+            : summaryFields.find(f => f.field === 'customer_name')?.value || 'Khách vãng lai';
 
-      const finalCustomerName =
-        knownName !== 'Khách vãng lai'
-          ? knownName
-          : summaryFields.find(f => f.field === 'customer_name')?.value || 'Khách vãng lai';
+        let audioUrl = record.audioStorageKey;
 
-      return {
-        id: record.id,
-        callerNumber: cleanPhone,
-        customerName: finalCustomerName,
-        direction,
-        startedAt: record.startedAt.toISOString(),
-        endedAt: record.endedAt?.toISOString() || null,
-        duration,
-        status,
-        bookingId: record.bookingId,
-        bookingCode: record.booking?.bookingCode,
-        recordingStatus: audioUrl ? 'UPLOADED' : record.recordingStatus,
-        transcriptStatus: segments.length > 0 ? 'COMPLETED' : record.transcriptStatus,
-        audioUrl,
-        summaryText,
-        segments,
-        summaryFields
-      };
-    });
+        // If completed call has no audio or still has old synthetic tone (< 380KB base64), upgrade to real 2-way spoken voice WAV
+        if (
+          status === 'COMPLETED' &&
+          (!audioUrl || (audioUrl.startsWith('data:audio/wav;base64,') && audioUrl.length < 380000))
+        ) {
+          const spoken = await synthesizeTwoWaySpokenCallWav(segments, finalCustomerName);
+          if (spoken) {
+            audioUrl = spoken.audioDataUrl;
+            segments = spoken.updatedSegments;
+            duration = spoken.durationSec;
+            const recomputed = extractCallSummaryFromTranscript(
+              segments,
+              cleanPhone,
+              finalCustomerName
+            );
+            summaryFields = recomputed.fields;
+            if (!summaryText) summaryText = recomputed.summaryText;
+
+            // Persist upgraded spoken audio & exact timestamps back to DB
+            try {
+              await prisma.callRecord.update({
+                where: { id: record.id },
+                data: {
+                  audioStorageKey: audioUrl,
+                  recordingStatus: 'UPLOADED',
+                  duration
+                }
+              });
+            } catch (e) {}
+          } else if (!audioUrl) {
+            audioUrl = generatePlayableCallWavDataUrl(segments, duration);
+          }
+        }
+
+        return {
+          id: record.id,
+          callerNumber: cleanPhone,
+          customerName: finalCustomerName,
+          direction,
+          startedAt: record.startedAt.toISOString(),
+          endedAt: record.endedAt?.toISOString() || null,
+          duration,
+          status,
+          bookingId: record.bookingId,
+          bookingCode: record.booking?.bookingCode,
+          recordingStatus: audioUrl ? 'UPLOADED' : record.recordingStatus,
+          transcriptStatus: segments.length > 0 ? 'COMPLETED' : record.transcriptStatus,
+          audioUrl,
+          summaryText,
+          segments,
+          summaryFields
+        };
+      })
+    );
 
     return NextResponse.json({ calls: formatted });
   } catch (error: any) {
@@ -159,7 +193,7 @@ export async function POST(request: Request) {
 
     const cleanPhone = String(callerNumber).replace(/[^0-9]/g, '');
     const storedCallerNumber = direction === 'outbound' ? `out_${cleanPhone}` : cleanPhone;
-    const callDuration = typeof duration === 'number' ? duration : 0;
+    let callDuration = typeof duration === 'number' ? duration : 0;
 
     const cookieStore = await cookies();
     const sessionToken = cookieStore.get(SESSION_COOKIE)?.value;
@@ -170,6 +204,23 @@ export async function POST(request: Request) {
       finalSegments = generateConversationSegments(cleanPhone, customerName);
     }
 
+    let finalAudioUrl: string | null = audioDataUrl || null;
+
+    // Synthesize real 2-way spoken Vietnamese voice recording (Agent + Customer) unless a real WebRTC/uploaded audio file was provided
+    if (
+      callDuration > 0 &&
+      (!finalAudioUrl || finalAudioUrl.startsWith('data:audio/wav;base64,'))
+    ) {
+      const spoken = await synthesizeTwoWaySpokenCallWav(finalSegments, customerName);
+      if (spoken) {
+        finalAudioUrl = spoken.audioDataUrl;
+        finalSegments = spoken.updatedSegments;
+        callDuration = spoken.durationSec;
+      } else if (!finalAudioUrl) {
+        finalAudioUrl = generatePlayableCallWavDataUrl(finalSegments, callDuration);
+      }
+    }
+
     const generatedSummary =
       callDuration > 0
         ? extractCallSummaryFromTranscript(finalSegments, cleanPhone, customerName)
@@ -178,15 +229,9 @@ export async function POST(request: Request) {
     const finalSummaryText: string =
       summaryText || generatedSummary?.summaryText || '';
     const finalFields: CallSummaryField[] =
-      Array.isArray(summaryFields) && summaryFields.length > 0
-        ? summaryFields
-        : generatedSummary?.fields || [];
+      generatedSummary?.fields ||
+      (Array.isArray(summaryFields) ? summaryFields : []);
 
-    const finalAudioUrl: string | null =
-      audioDataUrl ||
-      (callDuration > 0 ? generatePlayableCallWavDataUrl(finalSegments, callDuration) : null);
-
-    // Upsert customer name if discovered from conversation
     const discoveredName =
       customerName && customerName !== 'Khách hàng mới' && customerName !== 'Khách vãng lai'
         ? customerName
