@@ -184,10 +184,14 @@ function BookingPageContent() {
     const qPhone = searchParams?.get('phone');
     const qRoute = searchParams?.get('route');
     const qPickup = searchParams?.get('pickup');
+    const qDropoff = searchParams?.get('dropoff');
+    const qNotes = searchParams?.get('notes');
 
     if (qName) setName(qName);
     if (qPhone) setPhone(qPhone);
     if (qPickup) setPickup(qPickup);
+    if (qDropoff) setDropoff(qDropoff);
+    if (qNotes) setNotes(qNotes);
     
     // If qRoute exists, we will try to match it when routes are loaded in the other useEffect
     if (qRoute) {

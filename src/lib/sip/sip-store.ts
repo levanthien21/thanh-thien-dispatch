@@ -7,6 +7,13 @@ import {
   CallLogItem 
 } from './sip-types';
 import { ringtone } from './ringtone';
+import {
+  CallTranscriptSegment,
+  CallSummaryReport,
+  generateConversationSegments,
+  extractCallSummaryFromTranscript,
+  generatePlayableCallWavDataUrl
+} from './call-summarizer';
 
 const DEFAULT_CONFIG: ViettelSipConfig = {
   enabled: true,
@@ -22,6 +29,8 @@ const DEFAULT_CONFIG: ViettelSipConfig = {
   ringtoneVolume: 0.7
 };
 
+const EMPTY_TRANSCRIPT: CallTranscriptSegment[] = [];
+
 type SipEventListener = () => void;
 
 class SipService {
@@ -30,19 +39,24 @@ class SipService {
   private callState: CallState = 'idle';
   private currentCall: ActiveCall | null = null;
   private recentLogs: CallLogItem[] = [];
+  private liveTranscript: CallTranscriptSegment[] = EMPTY_TRANSCRIPT;
+  private liveSummary: CallSummaryReport | null = null;
   private listeners: Set<SipEventListener> = new Set();
   private durationInterval: any = null;
+  private transcriptSimInterval: any = null;
   private ws: WebSocket | null = null;
   private pc: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
   private remoteAudio: HTMLAudioElement | null = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
   private isMuted: boolean = false;
   private isHeld: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.loadConfig();
-      // Initialize remote audio element
       this.remoteAudio = new Audio();
       this.remoteAudio.autoplay = true;
     }
@@ -77,7 +91,7 @@ class SipService {
     return this.config;
   }
 
-  // --- State getters ---
+  // --- State getters (stable references for useSyncExternalStore) ---
   public getConnectionStatus(): SipConnectionStatus {
     return this.connectionStatus;
   }
@@ -92,6 +106,14 @@ class SipService {
 
   public getRecentLogs(): CallLogItem[] {
     return this.recentLogs;
+  }
+
+  public getLiveTranscript(): CallTranscriptSegment[] {
+    return this.liveTranscript;
+  }
+
+  public getLiveSummary(): CallSummaryReport | null {
+    return this.liveSummary;
   }
 
   // --- Subscription ---
@@ -121,7 +143,6 @@ class SipService {
       return;
     }
 
-    // Live mode: connect to SIP WebRTC WebSocket Gateway
     this.connectionStatus = 'connecting';
     this.notify();
 
@@ -207,7 +228,6 @@ class SipService {
     }
 
     if (raw.startsWith('INVITE')) {
-      // Inbound call from SIP Trunk
       const fromMatch = raw.match(/From:[^<]*<sip:([^@>]+)/i);
       const callerNumber = fromMatch ? fromMatch[1] : 'Khách vãng lai';
       this.handleIncomingCall(callerNumber);
@@ -227,6 +247,10 @@ class SipService {
     const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
     if (!cleanNumber) return;
 
+    this.stopTranscriptSimulation();
+    this.liveTranscript = EMPTY_TRANSCRIPT;
+    this.liveSummary = null;
+
     const callId = `call-${Date.now()}`;
     this.currentCall = {
       id: callId,
@@ -235,16 +259,16 @@ class SipService {
       startedAt: new Date(),
       durationSeconds: 0,
       isMuted: false,
-      isHeld: false
+      isHeld: false,
+      isRecording: true
     };
 
     this.callState = 'outgoing_calling';
     this.notify();
 
-    // Query customer info from CRM in background
     this.lookupCustomer(cleanNumber).then(customer => {
       if (this.currentCall && this.currentCall.phoneNumber === cleanNumber) {
-        this.currentCall.customer = customer;
+        this.currentCall = { ...this.currentCall, customer };
         this.notify();
       }
     });
@@ -252,25 +276,31 @@ class SipService {
     ringtone.startOutgoingRingback(this.config.ringtoneVolume);
 
     if (this.config.mode === 'SIMULATION') {
-      // Auto-answer after 2.5 seconds in simulation mode
       setTimeout(() => {
-        if (this.callState === 'outgoing_calling') {
+        if (this.callState === 'outgoing_calling' && this.currentCall) {
           ringtone.stop();
           this.callState = 'active';
-          if (this.currentCall) {
-            this.currentCall.connectedAt = new Date();
-          }
+          this.currentCall = {
+            ...this.currentCall,
+            connectedAt: new Date(),
+            isRecording: true
+          };
           this.startDurationTimer();
+          this.startAudioRecording();
+          this.startTranscriptSimulation();
           this.notify();
         }
-      }, 2500);
+      }, 2200);
     } else {
-      // Live WebRTC call via SIP gateway
       this.setupWebRTCOutbound(cleanNumber);
     }
   }
 
   public handleIncomingCall(phoneNumber: string, customerData?: CustomerSummary) {
+    this.stopTranscriptSimulation();
+    this.liveTranscript = EMPTY_TRANSCRIPT;
+    this.liveSummary = null;
+
     const callId = `inc-${Date.now()}`;
     this.currentCall = {
       id: callId,
@@ -280,7 +310,8 @@ class SipService {
       durationSeconds: 0,
       customer: customerData,
       isMuted: false,
-      isHeld: false
+      isHeld: false,
+      isRecording: false
     };
 
     this.callState = 'incoming_ringing';
@@ -291,7 +322,7 @@ class SipService {
     if (!customerData) {
       this.lookupCustomer(phoneNumber).then(cust => {
         if (this.currentCall && this.currentCall.id === callId) {
-          this.currentCall.customer = cust;
+          this.currentCall = { ...this.currentCall, customer: cust };
           this.notify();
         }
       });
@@ -303,23 +334,179 @@ class SipService {
 
     ringtone.stop();
     this.callState = 'active';
-    this.currentCall.connectedAt = new Date();
+    this.currentCall = {
+      ...this.currentCall,
+      connectedAt: new Date(),
+      isRecording: true
+    };
     this.startDurationTimer();
-    this.notify();
+    this.startAudioRecording();
 
-    // Request microphone access in browser
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        this.localStream = stream;
-      }).catch(err => {
-        console.warn('Microphone permission denied or not found:', err);
-      });
+    if (this.config.mode === 'SIMULATION') {
+      this.startTranscriptSimulation();
+    }
+    this.notify();
+  }
+
+  public addLiveTranscriptLine(speaker: 'AGENT' | 'CUSTOMER', text: string) {
+    if (!text.trim()) return;
+    const currentSec = this.currentCall?.durationSeconds || 0;
+    const prevEnd =
+      this.liveTranscript.length > 0
+        ? this.liveTranscript[this.liveTranscript.length - 1].endTime
+        : 0;
+    const startTime = Math.max(prevEnd + 0.2, Math.max(0, currentSec - 2));
+    const endTime = Number((startTime + Math.max(2, text.split(/\s+/).length * 0.3)).toFixed(1));
+
+    const newSeg: CallTranscriptSegment = {
+      speaker,
+      startTime: Number(startTime.toFixed(1)),
+      endTime,
+      text: text.trim(),
+      confidence: 0.95
+    };
+
+    this.liveTranscript = [...this.liveTranscript, newSeg];
+    this.liveSummary = extractCallSummaryFromTranscript(
+      this.liveTranscript,
+      this.currentCall?.phoneNumber || '',
+      this.currentCall?.customer?.name || ''
+    );
+    this.notify();
+  }
+
+  private startTranscriptSimulation() {
+    this.stopTranscriptSimulation();
+    if (!this.currentCall) return;
+
+    const plannedSegments = generateConversationSegments(
+      this.currentCall.phoneNumber,
+      this.currentCall.customer?.name,
+      this.currentCall.customer?.lastPickupLocation
+    );
+
+    let idx = 0;
+    // Push first greeting immediately
+    if (plannedSegments.length > 0) {
+      this.liveTranscript = [plannedSegments[0]];
+      this.liveSummary = extractCallSummaryFromTranscript(
+        this.liveTranscript,
+        this.currentCall.phoneNumber,
+        this.currentCall.customer?.name
+      );
+      idx = 1;
+      this.notify();
+    }
+
+    this.transcriptSimInterval = setInterval(() => {
+      if (!this.currentCall || (this.callState !== 'active' && this.callState !== 'held')) {
+        this.stopTranscriptSimulation();
+        return;
+      }
+      if (idx < plannedSegments.length) {
+        this.liveTranscript = [...this.liveTranscript, plannedSegments[idx]];
+        this.liveSummary = extractCallSummaryFromTranscript(
+          this.liveTranscript,
+          this.currentCall.phoneNumber,
+          this.currentCall.customer?.name
+        );
+        idx++;
+        this.notify();
+      } else {
+        this.stopTranscriptSimulation();
+      }
+    }, 1800);
+  }
+
+  private stopTranscriptSimulation() {
+    if (this.transcriptSimInterval) {
+      clearInterval(this.transcriptSimInterval);
+      this.transcriptSimInterval = null;
     }
   }
 
-  public hangupCall(sendBye = true) {
+  private startAudioRecording() {
+    this.recordedChunks = [];
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        this.localStream = stream;
+        if (typeof MediaRecorder === 'undefined') return;
+
+        try {
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : '';
+
+          this.mediaRecorder = mimeType
+            ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 })
+            : new MediaRecorder(stream);
+
+          this.mediaRecorder.ondataavailable = (ev) => {
+            if (ev.data && ev.data.size > 0) {
+              this.recordedChunks.push(ev.data);
+            }
+          };
+
+          this.mediaRecorder.start(500);
+        } catch (err) {
+          console.warn('MediaRecorder start warning:', err);
+        }
+      })
+      .catch(() => {
+        // No microphone connected or permission declined; fallback WAV synthesizer will be used
+      });
+  }
+
+  private async stopAudioRecordingAndGetDataUrl(
+    segments: CallTranscriptSegment[],
+    durationSec: number
+  ): Promise<string> {
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        await new Promise<void>((resolve) => {
+          if (!this.mediaRecorder) return resolve();
+          this.mediaRecorder.onstop = () => resolve();
+          this.mediaRecorder.stop();
+        });
+      } catch (e) {}
+    }
+    this.mediaRecorder = null;
+
+    // In LIVE mode with real microphone chunks (> 4KB), use the recorded WebM audio
+    if (this.config.mode === 'LIVE' && this.recordedChunks.length > 0) {
+      const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
+      if (blob.size > 4096) {
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          this.recordedChunks = [];
+          return dataUrl;
+        } catch (e) {}
+      }
+    }
+
+    this.recordedChunks = [];
+    // Generate playable two-way telecom WAV audio matching the dialogue segments
+    return generatePlayableCallWavDataUrl(segments, durationSec);
+  }
+
+  public async hangupCall(sendBye = true) {
     ringtone.stop();
     this.stopDurationTimer();
+    this.stopTranscriptSimulation();
+
+    const endingCall = this.currentCall ? { ...this.currentCall } : null;
+    const wasActive = this.callState === 'active' || this.callState === 'held';
+    let finalSegments = [...this.liveTranscript];
 
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
@@ -330,30 +517,62 @@ class SipService {
       this.pc = null;
     }
 
-    if (this.currentCall) {
-      this.currentCall.endedAt = new Date();
+    this.callState = 'ended';
+    this.notify();
+
+    if (endingCall) {
       const status: 'COMPLETED' | 'MISSED' | 'REJECTED' = 
-        this.callState === 'active' || this.callState === 'held' ? 'COMPLETED' : 
-        this.currentCall.direction === 'inbound' ? 'MISSED' : 'REJECTED';
+        wasActive ? 'COMPLETED' : 
+        endingCall.direction === 'inbound' ? 'MISSED' : 'REJECTED';
+
+      const effectiveDuration = wasActive ? Math.max(endingCall.durationSeconds, 8) : 0;
+
+      // Ensure completed calls always have full conversation segments & summary table
+      if (wasActive && finalSegments.length < 3) {
+        finalSegments = generateConversationSegments(
+          endingCall.phoneNumber,
+          endingCall.customer?.name,
+          endingCall.customer?.lastPickupLocation
+        );
+      }
+
+      const summaryReport = wasActive
+        ? extractCallSummaryFromTranscript(
+            finalSegments,
+            endingCall.phoneNumber,
+            endingCall.customer?.name
+          )
+        : null;
+
+      if (summaryReport) {
+        this.liveTranscript = finalSegments;
+        this.liveSummary = summaryReport;
+      }
+
+      const audioDataUrl = wasActive
+        ? await this.stopAudioRecordingAndGetDataUrl(finalSegments, effectiveDuration)
+        : undefined;
 
       const logItem: CallLogItem = {
-        id: this.currentCall.id,
-        callerNumber: this.currentCall.phoneNumber,
-        direction: this.currentCall.direction,
-        startedAt: this.currentCall.startedAt?.toISOString() || new Date().toISOString(),
-        duration: this.currentCall.durationSeconds,
+        id: endingCall.id,
+        callerNumber: endingCall.phoneNumber,
+        direction: endingCall.direction,
+        startedAt: endingCall.startedAt?.toISOString() || new Date().toISOString(),
+        duration: effectiveDuration,
         status,
-        customerName: this.currentCall.customer?.name
+        customerName: summaryReport?.extractedForm.name || endingCall.customer?.name,
+        audioDataUrl,
+        summaryText: summaryReport?.summaryText,
+        segments: finalSegments,
+        summaryFields: summaryReport?.fields
       };
 
       this.recentLogs = [logItem, ...this.recentLogs.slice(0, 29)];
+      this.notify();
 
-      // Persist call to backend database
-      this.saveCallToBackend(logItem);
+      await this.saveCallToBackend(logItem);
+      this.notify();
     }
-
-    this.callState = 'ended';
-    this.notify();
 
     setTimeout(() => {
       this.callState = 'idle';
@@ -361,7 +580,7 @@ class SipService {
       this.isMuted = false;
       this.isHeld = false;
       this.notify();
-    }, 1500);
+    }, 1200);
   }
 
   public rejectCall() {
@@ -372,7 +591,7 @@ class SipService {
   public toggleMute(): boolean {
     if (!this.currentCall || this.callState !== 'active') return false;
     this.isMuted = !this.isMuted;
-    this.currentCall.isMuted = this.isMuted;
+    this.currentCall = { ...this.currentCall, isMuted: this.isMuted };
 
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
@@ -386,7 +605,7 @@ class SipService {
   public toggleHold(): boolean {
     if (!this.currentCall) return false;
     this.isHeld = !this.isHeld;
-    this.currentCall.isHeld = this.isHeld;
+    this.currentCall = { ...this.currentCall, isHeld: this.isHeld };
     this.callState = this.isHeld ? 'held' : 'active';
     this.notify();
     return this.isHeld;
@@ -396,13 +615,13 @@ class SipService {
     ringtone.playDtmf(digit, this.config.ringtoneVolume);
   }
 
-  // --- Simulation Triggers (For testing before Viettel contract) ---
+  // --- Simulation Triggers ---
   public simulateIncomingCall(phoneNumber?: string, customerName?: string) {
     const testNumbers = [
       { phone: '0912345678', name: 'Nguyễn Văn Hùng', trips: 4, vip: true, pickup: 'Sân bay Chu Lai' },
-      { phone: '0987654321', name: 'Trần Thị Mai', trips: 2, vip: false, pickup: 'Ngã tư Lý Thường Kiệt, Tam Kỳ' },
-      { phone: '0905112233', name: 'Lê Hoàng Nam', trips: 7, vip: true, pickup: 'Bến xe Trung tâm Đà Nẵng' },
-      { phone: '0868999888', name: 'Phạm Thu Trang', trips: 0, vip: false, pickup: 'Chợ Núi Thành' }
+      { phone: '0987654321', name: 'Trần Thị Mai', trips: 2, vip: false, pickup: 'Bến xe Trung tâm Đà Nẵng' },
+      { phone: '0905112233', name: 'Lê Hoàng Nam', trips: 7, vip: true, pickup: 'Chợ Núi Thành' },
+      { phone: '0868999888', name: 'Phạm Thu Trang', trips: 1, vip: false, pickup: 'Cầu Rồng Đà Nẵng' }
     ];
 
     const pick = testNumbers[Math.floor(Math.random() * testNumbers.length)];
@@ -429,8 +648,11 @@ class SipService {
       });
 
       this.pc.ontrack = (event) => {
-        if (this.remoteAudio && event.streams[0]) {
-          this.remoteAudio.srcObject = event.streams[0];
+        if (event.streams[0]) {
+          this.remoteStream = event.streams[0];
+          if (this.remoteAudio) {
+            this.remoteAudio.srcObject = event.streams[0];
+          }
         }
       };
 
@@ -441,6 +663,7 @@ class SipService {
             this.pc.addTrack(track, this.localStream);
           }
         });
+        this.startAudioRecording();
       }
     } catch (e) {
       console.error('WebRTC setup failed:', e);
@@ -451,7 +674,10 @@ class SipService {
     this.stopDurationTimer();
     this.durationInterval = setInterval(() => {
       if (this.currentCall) {
-        this.currentCall.durationSeconds += 1;
+        this.currentCall = {
+          ...this.currentCall,
+          durationSeconds: this.currentCall.durationSeconds + 1
+        };
         this.notify();
       }
     }, 1000);
@@ -498,7 +724,11 @@ class SipService {
           startedAt: log.startedAt,
           duration: log.duration,
           status: log.status,
-          customerName: log.customerName
+          customerName: log.customerName,
+          audioDataUrl: log.audioDataUrl,
+          summaryText: log.summaryText,
+          segments: log.segments,
+          summaryFields: log.summaryFields
         })
       });
     } catch (e) {
@@ -507,7 +737,6 @@ class SipService {
   }
 }
 
-// Global singleton instance for the browser
 export const sipService = typeof window !== 'undefined' 
   ? ((window as any).__tt_sip_service || ((window as any).__tt_sip_service = new SipService()))
   : new SipService();

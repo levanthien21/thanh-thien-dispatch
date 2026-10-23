@@ -1,3 +1,5 @@
+import { CallTranscriptSegment, CallSummaryField } from './call-summarizer';
+
 export type SipConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'registered' | 'error';
 
 export type CallDirection = 'inbound' | 'outbound';
@@ -33,6 +35,7 @@ export interface ActiveCall {
   customer?: CustomerSummary;
   isMuted: boolean;
   isHeld: boolean;
+  isRecording?: boolean;
 }
 
 export interface CallLogItem {
@@ -45,6 +48,10 @@ export interface CallLogItem {
   customerName?: string;
   bookingId?: string;
   agentName?: string;
+  audioDataUrl?: string;
+  summaryText?: string;
+  segments?: CallTranscriptSegment[];
+  summaryFields?: CallSummaryField[];
 }
 
 export interface ViettelSipConfig {

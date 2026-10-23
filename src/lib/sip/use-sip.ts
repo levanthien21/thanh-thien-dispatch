@@ -9,8 +9,10 @@ import {
   ViettelSipConfig,
   CallLogItem 
 } from './sip-types';
+import { CallTranscriptSegment, CallSummaryReport } from './call-summarizer';
 
 const EMPTY_LOGS: CallLogItem[] = [];
+const EMPTY_TRANSCRIPT: CallTranscriptSegment[] = [];
 
 export function useSip() {
   const connectionStatus = useSyncExternalStore(
@@ -43,8 +45,19 @@ export function useSip() {
     () => EMPTY_LOGS
   );
 
+  const liveTranscript = useSyncExternalStore(
+    (callback) => sipService.subscribe(callback),
+    () => sipService.getLiveTranscript(),
+    () => EMPTY_TRANSCRIPT
+  );
+
+  const liveSummary = useSyncExternalStore(
+    (callback) => sipService.subscribe(callback),
+    () => sipService.getLiveSummary(),
+    () => null as CallSummaryReport | null
+  );
+
   useEffect(() => {
-    // Connect on mount in browser
     sipService.connect();
   }, []);
 
@@ -54,6 +67,8 @@ export function useSip() {
     currentCall,
     config,
     recentLogs,
+    liveTranscript,
+    liveSummary,
     makeCall: (phone: string) => sipService.makeCall(phone),
     answerCall: () => sipService.answerCall(),
     hangupCall: () => sipService.hangupCall(),
@@ -62,6 +77,7 @@ export function useSip() {
     toggleHold: () => sipService.toggleHold(),
     sendDtmf: (digit: string) => sipService.sendDtmf(digit),
     simulateIncomingCall: (phone?: string, name?: string) => sipService.simulateIncomingCall(phone, name),
+    addLiveTranscriptLine: (speaker: 'AGENT' | 'CUSTOMER', text: string) => sipService.addLiveTranscriptLine(speaker, text),
     saveConfig: (newCfg: Partial<ViettelSipConfig>) => sipService.saveConfig(newCfg),
     reconnect: () => sipService.reconnect()
   };

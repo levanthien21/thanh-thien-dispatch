@@ -15,7 +15,7 @@ import {
 import styles from './Softphone.module.css';
 
 export default function ActiveCallBanner() {
-  const { callState, currentCall, hangupCall, toggleMute, toggleHold } = useSip();
+  const { callState, currentCall, liveSummary, hangupCall, toggleMute, toggleHold } = useSip();
   const router = useRouter();
 
   if (!currentCall || (callState !== 'active' && callState !== 'held' && callState !== 'outgoing_calling')) {
@@ -31,11 +31,22 @@ export default function ActiveCallBanner() {
   const handleOpenBooking = () => {
     const query = new URLSearchParams();
     query.set('phone', currentCall.phoneNumber);
-    if (currentCall.customer?.name && currentCall.customer.name !== 'Khách hàng mới') {
-      query.set('name', currentCall.customer.name);
+    const name = liveSummary?.extractedForm.name || currentCall.customer?.name;
+    if (name && name !== 'Khách hàng mới') {
+      query.set('name', name);
     }
-    if (currentCall.customer?.lastPickupLocation) {
-      query.set('pickup', currentCall.customer.lastPickupLocation);
+    const pickup = liveSummary?.extractedForm.pickup || currentCall.customer?.lastPickupLocation;
+    if (pickup) {
+      query.set('pickup', pickup);
+    }
+    if (liveSummary?.extractedForm.dropoff) {
+      query.set('dropoff', liveSummary.extractedForm.dropoff);
+    }
+    if (liveSummary?.extractedForm.route) {
+      query.set('route', liveSummary.extractedForm.route);
+    }
+    if (liveSummary?.extractedForm.notes) {
+      query.set('notes', liveSummary.extractedForm.notes);
     }
     router.push(`/booking?${query.toString()}`);
   };
@@ -56,12 +67,12 @@ export default function ActiveCallBanner() {
             </span>
           ) : (
             <span className={styles.activeCallTimer}>
-              {formatDuration(currentCall.durationSeconds)}
+              ● REC {formatDuration(currentCall.durationSeconds)}
             </span>
           )}
         </div>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', marginTop: 2 }}>
-          {currentCall.phoneNumber} • {callState === 'held' ? 'Đang giữ máy' : 'Viettel SIP Mobile'}
+          {currentCall.phoneNumber} • {callState === 'held' ? 'Đang giữ máy' : 'Đang ghi âm & tóm tắt tự động'}
         </div>
       </div>
 
@@ -88,7 +99,7 @@ export default function ActiveCallBanner() {
           type="button"
           className={styles.iconBtn}
           onClick={handleOpenBooking}
-          title="Tạo vé cho khách đang gọi"
+          title="Tạo vé từ tóm tắt cuộc gọi"
           style={{ background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', borderColor: '#0284c7' }}
         >
           <Ticket size={16} />
@@ -98,7 +109,7 @@ export default function ActiveCallBanner() {
           type="button"
           className={`${styles.iconBtn} ${styles.iconBtnHangup}`}
           onClick={() => hangupCall()}
-          title="Gác máy"
+          title="Gác máy & Lưu ghi âm"
         >
           <PhoneOff size={16} />
         </button>

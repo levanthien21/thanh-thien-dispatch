@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--spacing-6);
-  height: calc(100vh - 200px);
+  min-height: 520px;
 }
 
 .pane {
@@ -18,25 +18,31 @@
 
 .chatBox {
   flex: 1;
+  max-height: 370px;
+  min-height: 260px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-4);
+  gap: var(--spacing-3);
   padding-right: var(--spacing-2);
-  margin-top: var(--spacing-4);
+  margin-top: var(--spacing-3);
 }
 
 .message {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 80%;
+  max-width: 85%;
+  animation: messageIn .28s cubic-bezier(.22,1,.36,1) both;
 }
 
 .sender {
   font-size: 0.75rem;
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .assistantMsg {
@@ -46,11 +52,13 @@
 .assistantMsg p {
   background-color: var(--bg-subtle);
   border: 1px solid var(--border-color);
-  padding: var(--spacing-3) var(--spacing-4);
+  padding: 10px 14px;
   border-radius: var(--radius-lg);
   border-bottom-left-radius: 4px;
   color: var(--text-main);
   font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.45;
 }
 
 .userMsg {
@@ -58,14 +66,123 @@
   text-align: right;
 }
 
+.userMsg .sender {
+  justify-content: flex-end;
+}
+
 .userMsg p {
   background: linear-gradient(135deg, var(--primary), #0877b7);
   color: white;
-  padding: var(--spacing-3) var(--spacing-4);
+  padding: 10px 14px;
   border-radius: var(--radius-lg);
   border-bottom-right-radius: 4px;
   font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.45;
+  text-align: left;
 }
-.message { animation: messageIn .28s cubic-bezier(.22,1,.36,1) both; }
-@keyframes messageIn { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: none; } }
-@media (max-width: 950px) { .splitPane { grid-template-columns: 1fr; height: auto; }.pane { min-height: 420px; } }
+
+.summaryBox {
+  background: rgba(2, 132, 199, 0.08);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.summaryTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.summaryTable th,
+.summaryTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.summaryTable th {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modalCard {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 960px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.modalBody {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.audioPlayerCard {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tagBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(7px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 950px) {
+  .splitPane {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .pane {
+    min-height: 420px;
+  }
+}
